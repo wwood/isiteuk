@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+
+###############################################################################
+#
+#    Copyright (C) 2024 Ben Woodcroft
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+###############################################################################
+
+__author__ = "Ben Woodcroft"
+__copyright__ = "Copyright 2024"
+__credits__ = ["Ben Woodcroft"]
+__license__ = "GPL3"
+__maintainer__ = "Ben Woodcroft"
+__email__ = "benjwoodcroft near gmail.com"
+__status__ = "Development"
+__version__ = "0.0.1-dev"
+
+import argparse
+import logging
+import sys
+import os
+import polars as pl
+
+sys.path = [os.path.join(os.path.dirname(os.path.realpath(__file__)),'..')] + sys.path
+sys.path = [os.path.join(os.path.dirname(os.path.realpath(__file__)),'..','..','singlem')] + sys.path
+
+import singlem
+import singlem.metapackage
+import singlem.pipe
+import singlem.taxonomy
+
+if __name__ == '__main__':
+    parent_parser = argparse.ArgumentParser(add_help=False)
+    parent_parser.add_argument('--debug', help='output debug information', action="store_true")
+    #parent_parser.add_argument('--version', help='output version information and quit',  action='version', version=repeatm.__version__)
+    parent_parser.add_argument('--quiet', help='only output errors', action="store_true")
+
+    parent_parser.add_argument('--threads', help='Number of threads to use', type=int, default=1)
+    parent_parser.add_argument('--output', help='Output file', required=True)
+    parent_parser.add_argument('--metapackage', help='Metapackage to use', required=True)
+    genome_input_parser = parent_parser.add_argument_group('Genomes')
+    genome_input_parser_mut = genome_input_parser.add_mutually_exclusive_group(required=True)
+    genome_input_parser_mut.add_argument('--genomes', nargs='+', help='Genome(s) to classify in FASTA format')
+    genome_input_parser_mut.add_argument('--genome-list', help='File containing newline-separataed list of genome(s) to classify in FASTA format')
+
+    args = parent_parser.parse_args()
+
+    # Setup logging
+    if args.debug:
+        loglevel = logging.DEBUG
+    elif args.quiet:
+        loglevel = logging.ERROR
+    else:
+        loglevel = logging.INFO
+    logging.basicConfig(level=loglevel, format='%(asctime)s %(levelname)s: %(message)s', datefmt='%Y/%m/%d %I:%M:%S %p')
+
+    logging.info("{} version {}".format(os.path.basename(__file__), __version__))
+
+    # Get metapackage
+    logging.info("Acquiring metapackage: {}".format(args.metapackage))
+    metapackage_object = singlem.metapackage.Metapackage.acquire(args.metapackage)
+
+    # Gather the target domains of each gene.
+    marker_to_target_domains = {}
+    domain_total_counts = {}
+    for pkg in metapackage_object.singlem_packages:
+        name = pkg.base_directory()
+        target_domains = pkg.target_domains()
+        marker_to_target_domains[name] = target_domains
+        for domain in target_domains:
+            if domain not in domain_total_counts:
+                domain_total_counts[domain] = 0
+            domain_total_counts[domain] += 1
+    log_str = []
+    for domain, count in domain_total_counts.items():
+        log_str.append(f"{domain}: {count}")
+    logging.info("Number of markers for each domain: " + ', '.join(log_str))
+
+    # Collect list of genomes
+    if args.genomes:
+        genomes = args.genomes
+    else:
+        with open(args.genome_list) as f:
+            genomes = [f.strip() for f in f.readlines()]
+
+    # Run SingleM pipe to get an OTU table
+    logging.info("Running SingleM pipe to get an OTU table on %d genomes" % len(genomes))
+    otu_table = singlem.pipe.SearchPipe().run_to_otu_table(
+        genomes = genomes,
+        metapackage_object = metapackage_object,
+        threads = args.threads,
+        min_orf_length = singlem.pipe.SearchPipe.DEFAULT_GENOME_MIN_ORF_LENGTH,
+        diamond_prefilter = True,
+        assignment_method = singlem.taxonomy.DIAMOND_ASSIGNMENT_METHOD,
+    )
+
+    gene_counts = []
+    for otu in otu_table:
+        tax_split = otu.taxonomy.split('; ')
+        if len(tax_split) == 1:
+            continue # Ignore genes assigned to Root
+        domain = tax_split[1]
+        gene_counts.append((otu.sample_name, otu.marker, domain))
+    
+    df = pl.DataFrame(gene_counts).transpose()
+    df.columns = ['genome','gene','domain']
+
+    genes_and_domains = set()
+    for gene, domains in marker_to_target_domains.items():
+        for domain in domains:
+            genes_and_domains.add((os.path.basename(gene).replace('.spkg','') + '_' + 'd__'+ domain))
+    df = df.with_columns((pl.col('gene') + '_' + pl.col('domain')).is_in(genes_and_domains).alias('is_target_domain'))
+
+    domain_cumulative = {}
+    for _, group in df.group_by(['genome','gene','domain','is_target_domain']).len().group_by(['genome','gene']):
+        total_hits = sum(group['len'])
+        for row in group.rows(named=True):
+            genome = row['genome']
+            domain = row['domain']
+            count = row['len']
+            is_target_domain = row['is_target_domain']
+            if genome not in domain_cumulative:
+                domain_cumulative[genome] = {}
+            if domain not in domain_cumulative[genome]:
+                domain_cumulative[genome][domain] = {}
+            if is_target_domain not in domain_cumulative[genome][domain]:
+                domain_cumulative[genome][domain][True] = 0
+                domain_cumulative[genome][domain][False] = 0
+            domain_cumulative[genome][domain][is_target_domain] += count / total_hits
+    
+    with open(args.output, 'w') as f:
+        print('genome\tdomain\tnum_in_target_domain\tnum_not_in_target_domain', file=f)
+        for genome, domain_counts in domain_cumulative.items():
+            for domain, is_target_domain_count in domain_counts.items():
+                print(f'{genome}\t{domain}\t{is_target_domain_count[True]}\t{is_target_domain_count[False]}', file=f)

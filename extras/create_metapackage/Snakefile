@@ -1,0 +1,17 @@
+
+euk_smpkg = '/work/microbiome/msingle/mess/153_eukprot/snakemake2/eukprot_tcs3.smpkg'
+prok_smpkg = '/work/microbiome/db/singlem/S3.2.1.GTDB_r214.metapackage_20231006.smpkg.zb/payload_directory'
+output_smpkg = '../../db/isiteuk.smpkg'
+
+rule merge:
+    output:
+        directory(output_smpkg),
+        touch('working_directoy/merge.done'),
+    conda:
+        'singlem-dev'
+    log:
+        'logs/merge.log'
+    shell:
+        '''
+        ~/git/singlem/extras/merge_metapackages.py --metapackage1 {euk_smpkg} --metapackage2 {prok_smpkg} --output {output_smpkg} 2> {log}
+        '''
