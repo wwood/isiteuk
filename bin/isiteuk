@@ -52,6 +52,7 @@ if __name__ == '__main__':
     parent_parser.add_argument('--output', help='Output file', required=True)
     parent_parser.add_argument('--chunk-size', help='Number of genomes to process in parallel', type=int, default=10**4)
     parent_parser.add_argument('--metapackage', help='Metapackage to use', required=True)
+    parent_parser.add_argument('--continue', dest='continuing', help='Continue from previous run', action='store_true')
     genome_input_parser = parent_parser.add_argument_group('Genomes')
     genome_input_parser_mut = genome_input_parser.add_mutually_exclusive_group(required=True)
     genome_input_parser_mut.add_argument('--genomes', nargs='+', help='Genome(s) to classify in FASTA format')
@@ -98,10 +99,24 @@ if __name__ == '__main__':
             genomes = [f.strip() for f in f.readlines()]
     logging.info(f"Processing {len(genomes)} genomes")
 
+    if args.continuing:
+        completed_genomes = set()
+        if not os.path.exists(args.output):
+            logging.error(f"Output file {args.output} does not exist. Cannot continue.")
+            sys.exit(1)
+        with open(args.output) as f:
+            for line in f:
+                if line.split("\t")[1] != "domain":
+                    completed_genomes.add(line.split("\t")[0])
+
+        logging.info(f"Skipping {len(completed_genomes)} genomes already completed")
+        genomes = [g for g in genomes if os.path.splitext(os.path.basename(g))[0] not in completed_genomes]
+
     genome_chunks = [genomes[i:i + args.chunk_size] for i in range(0, len(genomes), args.chunk_size)]
 
     for i, genome_chunk in enumerate(genome_chunks):
         logging.info(f"Processing chunk {i+1} of {len(genome_chunks)}")
+        first_line = (i == 0) & (not args.continuing)
 
         # Run SingleM pipe to get an OTU table
         logging.info(f"Running SingleM pipe to get an OTU table")
@@ -149,9 +164,9 @@ if __name__ == '__main__':
                 domain_cumulative[genome][domain][is_target_domain] += count / total_hits
 
         logging.info(f"Writing results to {args.output}")
-        open_type = 'w' if i == 0 else 'a'
+        open_type = 'w' if first_line else 'a'
         with open(args.output, open_type) as f:
-            if i == 0:
+            if first_line:
                 print('genome\tdomain\tnum_in_target_domain\tnum_not_in_target_domain', file=f)
             for genome, domain_counts in domain_cumulative.items():
                 for domain, is_target_domain_count in domain_counts.items():
