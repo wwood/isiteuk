@@ -164,10 +164,14 @@ if __name__ == '__main__':
                 domain_cumulative[genome][domain][is_target_domain] += count / total_hits
 
         logging.info(f"Writing results to {args.output}")
+        domains = df.unique("domain").get_column("domain").to_list()
         open_type = 'w' if first_line else 'a'
         with open(args.output, open_type) as f:
             if first_line:
                 print('genome\tdomain\tnum_in_target_domain\tnum_not_in_target_domain', file=f)
             for genome, domain_counts in domain_cumulative.items():
+                for domain in domains:
+                    if domain not in domain_counts:
+                        domain_counts[domain] = {True: 0, False: 0}
                 for domain, is_target_domain_count in domain_counts.items():
                     print(f'{genome}\t{domain}\t{is_target_domain_count[True]}\t{is_target_domain_count[False]}', file=f)
