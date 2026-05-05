@@ -136,7 +136,18 @@ if __name__ == '__main__':
                 continue # Ignore genes assigned to Root
             domain = tax_split[1]
             gene_counts.append((otu.sample_name, otu.marker, domain))
-        
+
+        if not gene_counts:
+            logging.info(f"No reads found for chunk {i+1}, writing empty results to mark genomes as completed")
+            open_type = 'w' if first_line else 'a'
+            with open(args.output, open_type) as f:
+                if first_line:
+                    print('genome\tdomain\tnum_in_target_domain\tnum_not_in_target_domain', file=f)
+                for genome in genome_chunk:
+                    genome_name = os.path.splitext(os.path.basename(genome))[0]
+                    print(f'{genome_name}\t\t0\t0', file=f)
+            continue
+
         df = pl.DataFrame(gene_counts).transpose()
         df.columns = ['genome','gene','domain']
 
@@ -175,3 +186,8 @@ if __name__ == '__main__':
                         domain_counts[domain] = {True: 0, False: 0}
                 for domain, is_target_domain_count in domain_counts.items():
                     print(f'{genome}\t{domain}\t{is_target_domain_count[True]}\t{is_target_domain_count[False]}', file=f)
+            genomes_with_hits = set(domain_cumulative.keys())
+            for genome in genome_chunk:
+                genome_name = os.path.splitext(os.path.basename(genome))[0]
+                if genome_name not in genomes_with_hits:
+                    print(f'{genome_name}\t\t0\t0', file=f)
