@@ -5,7 +5,7 @@ import zenodo_backpack
 DATA_ENVIRONMENT_VARIABLE = 'ISITEUK_METAPACKAGE_PATH'
 DATA_DEFAULT_VERSION = '0.0.1'
 # TODO: Update DATA_DOI after uploading the metapackage to Zenodo
-DATA_DOI = '10.5281/zenodo.PLACEHOLDER'
+DATA_DOI = '10.5281/zenodo.20755874'
 
 
 class Metapackage:
