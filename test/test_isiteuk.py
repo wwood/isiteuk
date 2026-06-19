@@ -69,6 +69,25 @@ def run_isiteuk(*args):
     )
 
 
+def _parse_output(content):
+    """Parse isiteuk TSV output into {genome: {domain: total_hits}}."""
+    result = {}
+    for line in content.splitlines()[1:]:  # skip header
+        parts = line.split('\t')
+        if len(parts) < 4:
+            continue
+        genome, domain, in_target, not_in_target = parts[0], parts[1], parts[2], parts[3]
+        if not domain:
+            continue
+        result.setdefault(genome, {})[domain] = float(in_target) + float(not_in_target)
+    return result
+
+
+def _dominant_domain(hits_by_domain):
+    """Return the domain with the most total hits."""
+    return max(hits_by_domain, key=hits_by_domain.get)
+
+
 @pytest.fixture(scope='module')
 def metapackage():
     from isiteuk.metapackage import DATA_ENVIRONMENT_VARIABLE
@@ -144,9 +163,21 @@ class TestProcess:
         with open(output) as f:
             content = f.read()
         assert EXPECTED_HEADER in content
-        assert 'GCF_002008365.1_genomic' in content
-        assert 'GCA_003139855.1_genomic' in content
-        assert 'binchicken_co8412.34_euk' in content
+
+        hits = _parse_output(content)
+
+        bac = hits['GCF_002008365.1_genomic']
+        assert 'Bacteria' in _dominant_domain(bac), \
+            f'Expected bacterial genome to have most hits in a Bacteria domain, got: {bac}'
+
+        arc = hits['GCA_003139855.1_genomic']
+        assert 'Archaea' in _dominant_domain(arc), \
+            f'Expected archaeal genome to have most hits in an Archaea domain, got: {arc}'
+
+        euk = hits['binchicken_co8412.34_euk']
+        euk_dominant = _dominant_domain(euk)
+        assert 'Bacteria' not in euk_dominant and 'Archaea' not in euk_dominant, \
+            f'Expected eukaryotic genome dominant domain to be non-prokaryotic, got: {euk}'
 
     def test_continue_flag(self, metapackage, tmp_path):
         output = str(tmp_path / 'output.tsv')
