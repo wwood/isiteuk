@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=45"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "isiteuk"
+version = "0.0.1"
+description = "In-situ identification of eukaryotes in metagenomic data"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENCE.txt"]
+authors = [
+    {name = "Ben Woodcroft", email = "benjwoodcroft@gmail.com"},
+]
+keywords = ["metagenomics", "bioinformatics", "eukaryotes"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Programming Language :: Python :: 3",
+]
+requires-python = ">=3.7"
+dependencies = [
+    "singlem>=0.16.0",
+    "polars>=0.20",
+    "zenodo_backpack>=0.3",
+]
+
+[project.scripts]
+isiteuk = "isiteuk.main:main"
+
+[project.urls]
+Homepage = "https://github.com/wwood/isiteuk"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["isiteuk*"]
