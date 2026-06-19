@@ -11,22 +11,40 @@ python = ">=3.7,<3.12"
 singlem = ">=0.16.0"
 polars = "0.20.*"
 diamond = "==2.1.24"
+zenodo_backpack = ">=0.3"
 
 [feature.main.pypi-dependencies]
 isiteuk = {path = ".", editable = true}
 
 [feature.dev.dependencies]
 pytest = "*"
-zenodo_backpack = ">=0.3"
 
 [environments]
 default = ["main"]
 dev = ["main", "dev"]
 
 [tasks]
-test-base = "pytest test"
+test-base = "pytest test -v"
 
 [tasks.test]
 depends-on = [
     {task = "test-base", environment = "dev"},
+]
+
+[tasks.test-expensive-base]
+cmd = "pytest test --run-expensive -v"
+
+[tasks.test-expensive]
+depends-on = [
+    {task = "test-expensive-base", environment = "dev"},
+]
+
+[tasks.run-a-test-base]
+args = ["test_name"]
+cmd = "pytest test --run-expensive -v -k {{ test_name }}"
+
+[tasks.run-a-test]
+args = ["test_name"]
+depends-on = [
+    {task = "run-a-test-base", environment = "dev", args = ["{{ test_name }}"]},
 ]

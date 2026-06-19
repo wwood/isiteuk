@@ -3,6 +3,8 @@ import subprocess
 import sys
 import os
 
+import isiteuk
+
 TEST_DATA_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data')
 BACTERIAL_GENOME = os.path.join(TEST_DATA_DIR, 'GCF_002008365.1_genomic.fna.gz')
 ARCHAEAL_GENOME = os.path.join(TEST_DATA_DIR, 'GCA_003139855.1_genomic.fna.gz')
@@ -14,6 +16,19 @@ METAPACKAGE = os.environ.get('ISITEUK_METAPACKAGE_PATH', DEFAULT_METAPACKAGE)
 ISITEUK_CMD = [sys.executable, '-m', 'isiteuk.main']
 
 EXPECTED_HEADER = 'genome\tdomain\tnum_in_target_domain\tnum_not_in_target_domain'
+
+
+class TestVersion:
+    def test_version(self):
+        assert isiteuk.__version__ is not None
+
+    def test_cli_version(self):
+        result = subprocess.run(
+            ISITEUK_CMD + ['--version'],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        assert isiteuk.__version__ in result.stdout
 
 
 def run_isiteuk(*args):
@@ -32,6 +47,7 @@ def metapackage():
     return METAPACKAGE
 
 
+@pytest.mark.expensive
 class TestProcess:
     def test_bacterial_genome(self, metapackage, tmp_path):
         output = str(tmp_path / 'output.tsv')

@@ -1,0 +1,48 @@
+name: Test isiteuk
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test-locked:
+    name: Test (locked deps) ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      matrix:
+        os: ["ubuntu-latest"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          cache: true
+      - name: Show environment info
+        run: |
+          pixi run -e dev --frozen pixi info
+          pixi run -e dev --frozen pixi list
+      - name: Run tests
+        run: pixi run -e dev --frozen pytest test -v
+
+  test-unlocked:
+    name: Test (latest deps) ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      matrix:
+        os: ["ubuntu-latest"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove lock file
+        run: rm -fv pixi.lock
+      - uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          cache: false
+      - name: Show environment info
+        run: |
+          pixi run -e dev pixi info
+          pixi run -e dev pixi list
+      - name: Run tests
+        run: pixi run -e dev pytest test -v
