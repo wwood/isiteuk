@@ -20,9 +20,9 @@ def run(cmd):
 def replace_in_file(path, pattern, replacement):
     with open(path) as f:
         content = f.read()
-    new_content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
-    if new_content == content:
+    if not re.search(pattern, content, flags=re.MULTILINE):
         raise Exception(f"Pattern '{pattern}' not found in {path}")
+    new_content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
     with open(path, 'w') as f:
         f.write(new_content)
     print(f"  Updated {path}")
