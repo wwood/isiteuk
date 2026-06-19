@@ -11,11 +11,41 @@ ARCHAEAL_GENOME = os.path.join(TEST_DATA_DIR, 'GCA_003139855.1_genomic.fna.gz')
 EUK_GENOME = os.path.join(TEST_DATA_DIR, 'binchicken_co8412.34_euk.fna.gz')
 
 DEFAULT_METAPACKAGE = '/work/microbiome/db/isiteuk/isiteuk-0.0.1.smpkg'
-METAPACKAGE = os.environ.get('ISITEUK_METAPACKAGE_PATH', DEFAULT_METAPACKAGE)
 
 ISITEUK_CMD = [sys.executable, '-m', 'isiteuk.main']
 
 EXPECTED_HEADER = 'genome\tdomain\tnum_in_target_domain\tnum_not_in_target_domain'
+
+
+def _is_zenodo_backpack(path):
+    import json
+    contents = os.path.join(path, 'CONTENTS.json')
+    if not os.path.exists(contents):
+        return False
+    try:
+        with open(contents) as f:
+            return 'zenodo_backpack_version' in json.load(f)
+    except Exception:
+        return False
+
+
+def _resolve_metapackage():
+    """Return the path to the .smpkg, unwrapping a zenodo backpack if needed."""
+    from isiteuk.metapackage import DATA_ENVIRONMENT_VARIABLE
+    import zenodo_backpack
+
+    env_path = os.environ.get(DATA_ENVIRONMENT_VARIABLE)
+    candidates = [p for p in [env_path, DEFAULT_METAPACKAGE] if p]
+
+    for path in candidates:
+        if not os.path.isdir(path):
+            continue
+        if _is_zenodo_backpack(path):
+            backpack = zenodo_backpack.acquire(path=path)
+            return backpack.payload_directory_string(enter_single_payload_directory=True)
+        return path
+
+    return None
 
 
 class TestVersion:
@@ -41,10 +71,14 @@ def run_isiteuk(*args):
 
 @pytest.fixture(scope='module')
 def metapackage():
-    if not os.path.exists(METAPACKAGE):
-        pytest.skip(f'Metapackage not found at {METAPACKAGE}. '
-                    f'Set ISITEUK_METAPACKAGE_PATH or run isiteuk data.')
-    return METAPACKAGE
+    from isiteuk.metapackage import DATA_ENVIRONMENT_VARIABLE
+    path = _resolve_metapackage()
+    if path is None:
+        pytest.skip(
+            f'Metapackage not found. Set {DATA_ENVIRONMENT_VARIABLE} to a zenodo backpack '
+            f'directory (after running isiteuk data) or directly to a .smpkg path.'
+        )
+    return path
 
 
 @pytest.mark.expensive
@@ -56,6 +90,7 @@ class TestProcess:
             '--metapackage', metapackage,
             '--output', output,
             '--genomes', BACTERIAL_GENOME,
+            '--threads', '12',
         )
         assert result.returncode == 0, result.stderr
         with open(output) as f:
@@ -71,6 +106,7 @@ class TestProcess:
             '--metapackage', metapackage,
             '--output', output,
             '--genomes', ARCHAEAL_GENOME,
+            '--threads', '12',
         )
         assert result.returncode == 0, result.stderr
         with open(output) as f:
@@ -86,6 +122,7 @@ class TestProcess:
             '--metapackage', metapackage,
             '--output', output,
             '--genomes', EUK_GENOME,
+            '--threads', '12',
         )
         assert result.returncode == 0, result.stderr
         with open(output) as f:
@@ -101,6 +138,7 @@ class TestProcess:
             '--metapackage', metapackage,
             '--output', output,
             '--genomes', BACTERIAL_GENOME, ARCHAEAL_GENOME, EUK_GENOME,
+            '--threads', '12',
         )
         assert result.returncode == 0, result.stderr
         with open(output) as f:
@@ -118,6 +156,7 @@ class TestProcess:
             '--metapackage', metapackage,
             '--output', output,
             '--genomes', BACTERIAL_GENOME,
+            '--threads', '12',
         )
         assert result.returncode == 0, result.stderr
 
@@ -128,6 +167,7 @@ class TestProcess:
             '--output', output,
             '--genomes', BACTERIAL_GENOME, ARCHAEAL_GENOME,
             '--continue',
+            '--threads', '12',
         )
         assert result.returncode == 0, result.stderr
         with open(output) as f:
@@ -146,6 +186,7 @@ class TestProcess:
             '--metapackage', metapackage,
             '--output', output,
             '--genome-list', genome_list,
+            '--threads', '12',
         )
         assert result.returncode == 0, result.stderr
         with open(output) as f:

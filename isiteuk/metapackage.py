@@ -18,8 +18,18 @@ class Metapackage:
                 f"No metapackage specified. Either set the {DATA_ENVIRONMENT_VARIABLE} "
                 "environment variable, use --metapackage, or run 'isiteuk data' to download."
             )
-        # Support both a zenodo backpack directory and a direct .smpkg path
-        if os.path.exists(os.path.join(env_path, 'CONTENTS.json')):
+        # Support both a zenodo backpack directory and a direct .smpkg path.
+        # Check for zenodo_backpack_version specifically — .smpkg dirs also have CONTENTS.json.
+        import json
+        contents_path = os.path.join(env_path, 'CONTENTS.json')
+        is_backpack = False
+        if os.path.exists(contents_path):
+            try:
+                with open(contents_path) as f:
+                    is_backpack = 'zenodo_backpack_version' in json.load(f)
+            except Exception:
+                pass
+        if is_backpack:
             backpack = zenodo_backpack.acquire(path=env_path, version=DATA_DEFAULT_VERSION)
             return singlem.metapackage.Metapackage.acquire(
                 backpack.payload_directory_string(enter_single_payload_directory=True)
@@ -52,9 +62,9 @@ class Metapackage:
                 f"The {DATA_ENVIRONMENT_VARIABLE} environment variable is not set. "
                 "Run 'isiteuk data' to download the metapackage first."
             )
-        zenodo_backpack.acquire(
+        backpack = zenodo_backpack.acquire(
             env_var_name=DATA_ENVIRONMENT_VARIABLE,
-            md5sum=True,
             version=DATA_DEFAULT_VERSION,
         )
+        zenodo_backpack.ZenodoBackpackDownloader().verify(backpack)
         logging.info("Metapackage verified successfully.")
