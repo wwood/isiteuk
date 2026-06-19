@@ -1,0 +1,251 @@
+###############################################################################
+#
+#    Copyright (C) 2024 Ben Woodcroft
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+###############################################################################
+
+import argparse
+import logging
+import sys
+import os
+import polars as pl
+
+import isiteuk
+from isiteuk.metapackage import Metapackage as IsiteukMetapackage, DATA_ENVIRONMENT_VARIABLE
+
+import singlem.metapackage
+import singlem.pipe
+import singlem.taxonomy
+
+
+def process_cmd(args):
+    logging.info("isiteuk version {}".format(isiteuk.__version__))
+
+    if args.metapackage:
+        metapackage_object = singlem.metapackage.Metapackage.acquire(args.metapackage)
+    else:
+        metapackage_object = IsiteukMetapackage.acquire_default()
+
+    marker_to_target_domains = {}
+    domain_total_counts = {}
+    for pkg in metapackage_object.singlem_packages:
+        name = pkg.base_directory()
+        target_domains = pkg.target_domains()
+        marker_to_target_domains[name] = target_domains
+        for domain in target_domains:
+            if domain not in domain_total_counts:
+                domain_total_counts[domain] = 0
+            domain_total_counts[domain] += 1
+    log_str = []
+    for domain, count in domain_total_counts.items():
+        log_str.append(f"{domain}: {count}")
+    logging.info("Number of markers for each domain: " + ', '.join(log_str))
+
+    if args.genomes:
+        genomes = args.genomes
+    else:
+        with open(args.genome_list) as f:
+            genomes = [line.strip() for line in f.readlines()]
+    logging.info(f"Processing {len(genomes)} genomes")
+
+    if args.continuing:
+        completed_genomes = set()
+        if not os.path.exists(args.output):
+            logging.error(f"Output file {args.output} does not exist. Cannot continue.")
+            sys.exit(1)
+        with open(args.output) as f:
+            for line in f:
+                if line.split("\t")[1] != "domain":
+                    completed_genomes.add(line.split("\t")[0])
+        logging.info(f"Skipping {len(completed_genomes)} genomes already completed")
+        genomes = [g for g in genomes if os.path.splitext(os.path.basename(g))[0] not in completed_genomes]
+
+    genome_chunks = [genomes[i:i + args.chunk_size] for i in range(0, len(genomes), args.chunk_size)]
+
+    for i, genome_chunk in enumerate(genome_chunks):
+        logging.info(f"Processing chunk {i+1} of {len(genome_chunks)}")
+        first_line = (i == 0) and (not args.continuing)
+
+        logging.info("Running SingleM pipe to get an OTU table")
+        otu_table = singlem.pipe.SearchPipe().run_to_otu_table(
+            genomes=genome_chunk,
+            metapackage_object=metapackage_object,
+            threads=args.threads,
+            min_orf_length=singlem.pipe.SearchPipe.DEFAULT_GENOME_MIN_ORF_LENGTH,
+            diamond_prefilter=True,
+            assignment_method=singlem.taxonomy.DIAMOND_ASSIGNMENT_METHOD,
+        )
+
+        gene_counts = []
+        for otu in otu_table:
+            tax_split = otu.taxonomy.split('; ')
+            if len(tax_split) == 1:
+                continue
+            domain = tax_split[1]
+            gene_counts.append((otu.sample_name, otu.marker, domain))
+
+        if not gene_counts:
+            logging.info(f"No reads found for chunk {i+1}, writing empty results to mark genomes as completed")
+            open_type = 'w' if first_line else 'a'
+            with open(args.output, open_type) as f:
+                if first_line:
+                    print('genome\tdomain\tnum_in_target_domain\tnum_not_in_target_domain', file=f)
+                for genome in genome_chunk:
+                    genome_name = os.path.splitext(os.path.basename(genome))[0]
+                    print(f'{genome_name}\t\t0\t0', file=f)
+            continue
+
+        df = pl.DataFrame(gene_counts).transpose()
+        df.columns = ['genome', 'gene', 'domain']
+
+        genes_and_domains = set()
+        for gene, domains in marker_to_target_domains.items():
+            for domain in domains:
+                genes_and_domains.add(
+                    os.path.basename(gene).replace('.spkg', '') + '_d__' + domain
+                )
+        df = df.with_columns(
+            (pl.col('gene') + '_' + pl.col('domain')).is_in(genes_and_domains).alias('is_target_domain')
+        )
+
+        domain_cumulative = {}
+        for _, group in df.group_by(['genome', 'gene', 'domain', 'is_target_domain']).len().group_by(['genome', 'gene']):
+            total_hits = sum(group['len'])
+            for row in group.rows(named=True):
+                genome = row['genome']
+                domain = row['domain']
+                count = row['len']
+                is_target_domain = row['is_target_domain']
+                if genome not in domain_cumulative:
+                    domain_cumulative[genome] = {}
+                if domain not in domain_cumulative[genome]:
+                    domain_cumulative[genome][domain] = {}
+                if is_target_domain not in domain_cumulative[genome][domain]:
+                    domain_cumulative[genome][domain][True] = 0
+                    domain_cumulative[genome][domain][False] = 0
+                domain_cumulative[genome][domain][is_target_domain] += count / total_hits
+
+        logging.info(f"Writing results to {args.output}")
+        domains = df.unique("domain").get_column("domain").to_list()
+        open_type = 'w' if first_line else 'a'
+        with open(args.output, open_type) as f:
+            if first_line:
+                print('genome\tdomain\tnum_in_target_domain\tnum_not_in_target_domain', file=f)
+            for genome, domain_counts in domain_cumulative.items():
+                for domain in domains:
+                    if domain not in domain_counts:
+                        domain_counts[domain] = {True: 0, False: 0}
+                for domain, is_target_domain_count in domain_counts.items():
+                    print(
+                        f'{genome}\t{domain}\t{is_target_domain_count[True]}\t{is_target_domain_count[False]}',
+                        file=f
+                    )
+            genomes_with_hits = set(domain_cumulative.keys())
+            for genome in genome_chunk:
+                genome_name = os.path.splitext(os.path.basename(genome))[0]
+                if genome_name not in genomes_with_hits:
+                    print(f'{genome_name}\t\t0\t0', file=f)
+
+
+def data_cmd(args):
+    if args.verify_only:
+        IsiteukMetapackage.verify(output_directory=args.output_directory)
+    else:
+        IsiteukMetapackage.download(output_directory=args.output_directory)
+
+
+def main():
+    parent_parser = argparse.ArgumentParser(
+        prog='isiteuk',
+        description='In-situ identification of eukaryotes in metagenomic data',
+    )
+    parent_parser.add_argument('--debug', help='output debug information', action='store_true')
+    parent_parser.add_argument('--quiet', help='only output errors', action='store_true')
+    parent_parser.add_argument('--version', action='version', version=f'%(prog)s {isiteuk.__version__}')
+
+    subparsers = parent_parser.add_subparsers(
+        title='subcommands',
+        dest='subparser_name',
+        description='choose one of these subcommands',
+    )
+
+    # process subcommand
+    process_parser = subparsers.add_parser(
+        'process',
+        help='Classify genomes by domain using SingleM',
+        description='Classify genomes by domain using SingleM marker genes',
+    )
+    process_parser.add_argument('--threads', type=int, default=1,
+                                help='Number of threads to use [default: %(default)s]')
+    process_parser.add_argument('--output', required=True,
+                                help='Output TSV file')
+    process_parser.add_argument('--chunk-size', type=int, default=10**4,
+                                help='Number of genomes to process per chunk [default: %(default)s]')
+    process_parser.add_argument(
+        '--metapackage',
+        help=f'SingleM metapackage to use [default: use {DATA_ENVIRONMENT_VARIABLE} env var]',
+    )
+    process_parser.add_argument('--continue', dest='continuing',
+                                help='Continue from a previous incomplete run', action='store_true')
+    genome_group = process_parser.add_argument_group('Genomes')
+    genome_group_mut = genome_group.add_mutually_exclusive_group(required=True)
+    genome_group_mut.add_argument('--genomes', nargs='+',
+                                  help='Genome(s) to classify in FASTA format')
+    genome_group_mut.add_argument('--genome-list',
+                                  help='File containing newline-separated list of genome paths in FASTA format')
+
+    # data subcommand
+    data_parser = subparsers.add_parser(
+        'data',
+        help='Download reference metapackage data',
+        description='Download the isiteuk reference metapackage from Zenodo',
+    )
+    data_parser.add_argument(
+        '--output-directory',
+        help=f'Directory to download the metapackage to [required unless using --verify-only]',
+    )
+    data_parser.add_argument(
+        '--verify-only',
+        help=f'Check that the data in {DATA_ENVIRONMENT_VARIABLE} is up to date with correct checksums',
+        action='store_true',
+        default=False,
+    )
+
+    args = parent_parser.parse_args()
+
+    if args.debug:
+        loglevel = logging.DEBUG
+    elif args.quiet:
+        loglevel = logging.ERROR
+    else:
+        loglevel = logging.INFO
+    logging.basicConfig(
+        level=loglevel,
+        format='%(asctime)s %(levelname)s: %(message)s',
+        datefmt='%Y/%m/%d %I:%M:%S %p',
+    )
+
+    if args.subparser_name == 'process':
+        process_cmd(args)
+    elif args.subparser_name == 'data':
+        data_cmd(args)
+    else:
+        parent_parser.print_help()
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()
