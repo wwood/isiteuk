@@ -1,6 +1,6 @@
 [workspace]
 name = "isiteuk"
-version = "0.0.1"
+version = "0.0.2"
 description = "In-situ identification of eukaryotes in metagenomic data"
 authors = ["Ben Woodcroft <benjwoodcroft@gmail.com>"]
 channels = ["conda-forge", "bioconda"]

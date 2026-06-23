@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "isiteuk"
-version = "0.0.1"
+version = "0.0.2"
 description = "In-situ identification of eukaryotes in metagenomic data"
 readme = "README.md"
 license = "GPL-3.0-or-later"
