@@ -17,35 +17,24 @@ ISITEUK_CMD = [sys.executable, '-m', 'isiteuk.main']
 EXPECTED_HEADER = 'genome\tdomain\tnum_in_target_domain\tnum_not_in_target_domain'
 
 
-def _is_zenodo_backpack(path):
-    import json
-    contents = os.path.join(path, 'CONTENTS.json')
-    if not os.path.exists(contents):
-        return False
-    try:
-        with open(contents) as f:
-            return 'zenodo_backpack_version' in json.load(f)
-    except Exception:
-        return False
-
-
 def _resolve_metapackage():
-    """Return the path to the .smpkg, unwrapping a zenodo backpack if needed."""
-    from isiteuk.metapackage import DATA_ENVIRONMENT_VARIABLE
-    import zenodo_backpack
+    from isiteuk.metapackage import DATA_ENVIRONMENT_VARIABLE, Metapackage
 
     env_path = os.environ.get(DATA_ENVIRONMENT_VARIABLE)
     candidates = [p for p in [env_path, DEFAULT_METAPACKAGE] if p]
 
     for path in candidates:
-        if not os.path.isdir(path):
-            continue
-        if _is_zenodo_backpack(path):
-            backpack = zenodo_backpack.acquire(path=path)
-            return backpack.payload_directory_string(enter_single_payload_directory=True)
-        return path
+        if os.path.isdir(path):
+            return Metapackage.resolve_path(path)
 
     return None
+
+
+def _write_json(path, data):
+    import json
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w') as f:
+        json.dump(data, f)
 
 
 class TestVersion:
@@ -59,6 +48,40 @@ class TestVersion:
         )
         assert result.returncode == 0
         assert isiteuk.__version__ in result.stdout
+
+
+class TestResolvePath:
+    def test_direct_smpkg(self, tmp_path):
+        from isiteuk.metapackage import Metapackage
+        smpkg = tmp_path / 'isiteuk-0.0.1.smpkg'
+        _write_json(str(smpkg / 'CONTENTS.json'), {'singlem_metapackage_version': 4})
+        assert Metapackage.resolve_path(str(smpkg)) == str(smpkg)
+
+    def test_nested_backpack(self, tmp_path):
+        from isiteuk.metapackage import Metapackage
+        backpack = tmp_path / 'isiteuk-backpack-0.0.1'
+        smpkg = backpack / 'payload_directory' / 'isiteuk-0.0.1.smpkg'
+        _write_json(str(backpack / 'CONTENTS.json'), {
+            'zenodo_backpack_version': 1,
+            'data_version': '0.0.1',
+            'payload_directory': 'payload_directory',
+            'md5sums': {},
+        })
+        _write_json(str(smpkg / 'CONTENTS.json'), {'singlem_metapackage_version': 4})
+        assert Metapackage.resolve_path(str(backpack)) == str(smpkg)
+
+    def test_official_backpack(self, tmp_path):
+        from isiteuk.metapackage import Metapackage
+        backpack = tmp_path / 'isiteuk-0.0.1.smpkg.zb'
+        payload = backpack / 'payload_directory'
+        _write_json(str(backpack / 'CONTENTS.json'), {
+            'zenodo_backpack_version': 1,
+            'data_version': '0.0.1',
+            'payload_directory': 'payload_directory',
+            'md5sums': {},
+        })
+        _write_json(str(payload / 'CONTENTS.json'), {'singlem_metapackage_version': 4})
+        assert Metapackage.resolve_path(str(backpack)) == str(payload)
 
 
 def run_isiteuk(*args):
