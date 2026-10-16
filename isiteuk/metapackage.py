@@ -1,3 +1,4 @@
+import json
 import os
 import logging
 import zenodo_backpack
@@ -8,34 +9,55 @@ DATA_DEFAULT_VERSION = '0.0.1'
 DATA_DOI = '10.5281/zenodo.20755874'
 
 
+def _contents(path):
+    contents_path = os.path.join(path, 'CONTENTS.json')
+    if not os.path.exists(contents_path):
+        return None
+    try:
+        with open(contents_path) as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def _is_backpack(path):
+    contents = _contents(path)
+    return bool(contents) and 'zenodo_backpack_version' in contents
+
+
+def _is_smpkg(path):
+    contents = _contents(path)
+    return bool(contents) and 'singlem_metapackage_version' in contents
+
+
 class Metapackage:
     @staticmethod
-    def acquire_default():
+    def resolve_path(metapackage_path, version=None):
+        if _is_backpack(metapackage_path):
+            backpack = zenodo_backpack.acquire(path=metapackage_path, version=version)
+            payload = backpack.payload_directory_string()
+            if _is_smpkg(payload):
+                return payload
+            return backpack.payload_directory_string(enter_single_payload_directory=True)
+        return metapackage_path
+
+    @staticmethod
+    def acquire(metapackage_path, version=None):
         import singlem.metapackage
+        return singlem.metapackage.Metapackage.acquire(
+            Metapackage.resolve_path(metapackage_path, version=version)
+        )
+
+    @staticmethod
+    def acquire_default():
         env_path = os.environ.get(DATA_ENVIRONMENT_VARIABLE)
         if env_path is None:
             raise Exception(
                 f"No metapackage specified. Either set the {DATA_ENVIRONMENT_VARIABLE} "
                 "environment variable, use --metapackage, or run 'isiteuk data' to download."
             )
-        # Support both a zenodo backpack directory and a direct .smpkg path.
-        # Check for zenodo_backpack_version specifically — .smpkg dirs also have CONTENTS.json.
-        import json
-        contents_path = os.path.join(env_path, 'CONTENTS.json')
-        is_backpack = False
-        if os.path.exists(contents_path):
-            try:
-                with open(contents_path) as f:
-                    is_backpack = 'zenodo_backpack_version' in json.load(f)
-            except Exception:
-                pass
-        if is_backpack:
-            backpack = zenodo_backpack.acquire(path=env_path, version=DATA_DEFAULT_VERSION)
-            return singlem.metapackage.Metapackage.acquire(
-                backpack.payload_directory_string(enter_single_payload_directory=True)
-            )
-        else:
-            return singlem.metapackage.Metapackage.acquire(env_path)
+        version = DATA_DEFAULT_VERSION if _is_backpack(env_path) else None
+        return Metapackage.acquire(env_path, version=version)
 
     @staticmethod
     def download(output_directory=None):

@@ -26,7 +26,6 @@ import polars as pl
 import isiteuk
 from isiteuk.metapackage import Metapackage as IsiteukMetapackage, DATA_ENVIRONMENT_VARIABLE
 
-import singlem.metapackage
 import singlem.pipe
 import singlem.taxonomy
 
@@ -35,7 +34,7 @@ def process_cmd(args):
     logging.info("isiteuk version {}".format(isiteuk.__version__))
 
     if args.metapackage:
-        metapackage_object = singlem.metapackage.Metapackage.acquire(args.metapackage)
+        metapackage_object = IsiteukMetapackage.acquire(args.metapackage)
     else:
         metapackage_object = IsiteukMetapackage.acquire_default()
 
@@ -196,7 +195,7 @@ def main():
                                 help='Number of genomes to process per chunk [default: %(default)s]')
     process_parser.add_argument(
         '--metapackage',
-        help=f'SingleM metapackage to use [default: use {DATA_ENVIRONMENT_VARIABLE} env var]',
+        help=f'.smpkg or zenodo backpack [default: use {DATA_ENVIRONMENT_VARIABLE} env var]',
     )
     process_parser.add_argument('--continue', dest='continuing',
                                 help='Continue from a previous incomplete run', action='store_true')

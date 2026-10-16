@@ -17,7 +17,7 @@ conda activate isiteuk
 pip install isiteuk
 ```
 
-Non-Python dependencies (SingleM, DIAMOND) must be installed separately — see `pixi.toml` for the full list.
+This installs the Python package only. Native dependencies (DIAMOND and SingleM's other binaries) must be installed separately — conda is recommended instead.
 
 ### GitHub (development)
 
@@ -65,11 +65,11 @@ isiteuk process \
     --threads 64
 ```
 
-The `--metapackage` flag can override `ISITEUK_METAPACKAGE_PATH` for a one-off run:
+The `--metapackage` flag can override `ISITEUK_METAPACKAGE_PATH` for a one-off run (a `.smpkg` or the backpack directory from `isiteuk data`):
 
 ```bash
 isiteuk process \
-    --metapackage /path/to/isiteuk-0.0.1.smpkg \
+    --metapackage /path/to/isiteuk-backpack-0.0.1 \
     --output results.tsv \
     --genomes genome1.fna.gz
 ```
@@ -105,7 +105,7 @@ Full integration tests (requires `ISITEUK_METAPACKAGE_PATH` to be set):
 pixi run test-expensive
 ```
 
-Run a single test by name:
+Run a single integration test by name (also requires the metapackage):
 
 ```bash
 pixi run run-a-test test_bacterial_genome
