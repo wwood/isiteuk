@@ -32,12 +32,14 @@ This installs isiteuk and all dependencies (including SingleM) into a managed en
 
 ## Reference data
 
-Download the isiteuk metapackage from Zenodo:
+Download the isiteuk metapackage (`isiteuk-0.0.1.smpkg`) with:
 
 ```bash
 isiteuk data --output-directory /path/to/isiteuk-data
-export ISITEUK_METAPACKAGE_PATH=/path/to/isiteuk-data/isiteuk-backpack-0.0.1
+export ISITEUK_METAPACKAGE_PATH=/path/to/isiteuk-data/isiteuk-0.0.1.smpkg
 ```
+
+Or download it manually from https://doi.org/10.5281/zenodo.20755874.
 
 Add the `export` line to your `.bashrc` or equivalent to avoid repeating it. To verify the download:
 
@@ -65,11 +67,11 @@ isiteuk process \
     --threads 64
 ```
 
-The `--metapackage` flag can override `ISITEUK_METAPACKAGE_PATH` for a one-off run (a `.smpkg` or the backpack directory from `isiteuk data`):
+The `--metapackage` flag can override `ISITEUK_METAPACKAGE_PATH` for a one-off run:
 
 ```bash
 isiteuk process \
-    --metapackage /path/to/isiteuk-backpack-0.0.1 \
+    --metapackage /path/to/isiteuk-0.0.1.smpkg \
     --output results.tsv \
     --genomes genome1.fna.gz
 ```
