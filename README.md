@@ -4,6 +4,27 @@ isiteuk classifies genomes by domain (Bacteria, Archaea, Eukaryota) using [Singl
 
 ## Installation
 
+### Pixi (recommended)
+
+After installing [pixi](https://pixi.sh), enter a pixi shell and check that isiteuk is available:
+
+```bash
+cat >pixi.toml <<EOL
+[workspace]
+authors = ["Ben Woodcroft <possibly@somewhere.com>"]
+channels = ["conda-forge", "bioconda"]
+name = "isiteuk"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[dependencies]
+isiteuk = "*"
+EOL
+
+pixi shell
+isiteuk --help
+```
+
 ### Conda (recommended)
 
 ```bash
@@ -17,7 +38,7 @@ conda activate isiteuk
 pip install isiteuk
 ```
 
-This installs the Python package only. Native dependencies (DIAMOND and SingleM's other binaries) must be installed separately — conda is recommended instead.
+This installs the Python package only. Native dependencies (DIAMOND and other binary dependencies of SingleM) must be installed separately — [pixi](https://pixi.sh) or conda is recommended instead.
 
 ### GitHub (development)
 
@@ -35,8 +56,19 @@ This installs isiteuk and all dependencies (including SingleM) into a managed en
 Download the isiteuk metapackage (`isiteuk-0.0.1.smpkg`) with:
 
 ```bash
-isiteuk data --output-directory /path/to/isiteuk-data
-export ISITEUK_METAPACKAGE_PATH=/path/to/isiteuk-data/isiteuk-0.0.1.smpkg
+$ isiteuk data --output-directory /path/to/isiteuk-data
+2026/10/16 03:28:06 PM INFO: Downloading isiteuk metapackage version 0.0.1 from 10.5281/zenodo.20755874 ...
+2026/10/16 03:28:12 PM INFO: Downloading https://zenodo.org/api/records/20755875/files/isiteuk-0.0.1.smpkg.zb.tar.gz/content to out/isiteuk-0.0.1.smpkg.zb.tar.gz.
+100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 973M/973M [12:56<00:00, 1.25MiB/s]
+2026/10/16 03:41:11 PM INFO: Extracting files from archive...
+2026/10/16 03:41:49 PM INFO: Verifying version and checksums...
+2026/10/16 03:42:02 PM INFO: Verification success.
+2026/10/16 03:42:02 PM INFO: Finished downloading data
+2026/10/16 03:42:02 PM INFO: export ISITEUK_METAPACKAGE_PATH='/path/to/isiteuk-data/isiteuk-0.0.1'
+```
+Then follow the instructions from the final line of above. Set the environment variable so that this data is used automatically, by adding the following to your .bashrc file. Note that this export can point either to the extracted directory or to the `.smpkg` file within the `payload_directory`.
+```
+export ISITEUK_METAPACKAGE_PATH=/path/to/isiteuk-data/isiteuk-0.0.1
 ```
 
 Or download it manually from https://doi.org/10.5281/zenodo.20755874.
