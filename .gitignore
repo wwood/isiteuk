@@ -5,3 +5,4 @@ __pycache__/
 .pixi/
 *log
 isiteuk/version.py
+db/
