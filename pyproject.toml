@@ -18,7 +18,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Programming Language :: Python :: 3",
 ]
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 dependencies = [
     "singlem>=0.16.0",
     "polars>=0.20",

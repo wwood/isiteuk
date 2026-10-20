@@ -6,7 +6,7 @@ channels = ["conda-forge", "bioconda"]
 platforms = ["linux-64"]
 
 [feature.main.dependencies]
-python = ">=3.7,<3.12"
+python = ">=3.8,<3.12"
 singlem = ">=0.16.0"
 polars = ">1.0.0"
 diamond = ">=2.1.21"
@@ -19,9 +19,17 @@ isiteuk = {path = ".", editable = true}
 pytest = "*"
 setuptools-scm = "*"
 
+[feature.release.dependencies]
+python = ">=3.11,<3.12"
+setuptools-scm = "*"
+
+[feature.release.pypi-dependencies]
+bird-tool-utils = ">=0.7.2"
+
 [environments]
 default = ["main"]
 dev = ["main", "dev"]
+release = { features = ["release"], no-default-feature = true }
 
 [tasks]
 test-base = "pytest test -v"
@@ -47,4 +55,14 @@ cmd = "pytest test --run-expensive -v -k {{ test_name }}"
 args = ["test_name"]
 depends-on = [
     {task = "run-a-test-base", environment = "dev", args = ["{{ test_name }}"]},
+]
+
+[tasks.release-base]
+args = ["version"]
+cmd = "bird-release-python --version {{ version }}"
+
+[tasks.release]
+args = ["version"]
+depends-on = [
+    {task = "release-base", environment = "release", args = ["{{ version }}"]},
 ]
