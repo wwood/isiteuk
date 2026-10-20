@@ -8,7 +8,9 @@ fi
 
 version=$1
 
-pixi run -e dev bird-release-python --version "$version"
+pixi run -e dev python admin/changelog_notes.py --roll "$version" >/dev/null
+
+pixi run -e dev bird-release-python --allow-dirty --version "$version"
 
 cat <<EOF
 

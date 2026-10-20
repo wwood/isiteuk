@@ -50,20 +50,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Extract changelog for this tag
         run: |
-          python3 <<'PY'
-          import os
-          import pathlib
-          import re
-
-          version = os.environ["GITHUB_REF_NAME"].lstrip("v")
-          text = pathlib.Path("CHANGELOG.md").read_text()
-          match = re.search(
-              rf"(?ms)^##\s+\[?v?{re.escape(version)}\]?\s*$(.*?)(?=^##\s|\Z)",
-              text,
-          )
-          notes = match.group(1).strip() if match else f"isiteuk {version}"
-          pathlib.Path("release-notes.md").write_text(notes + "\n")
-          PY
+          version="${GITHUB_REF_NAME#v}"
+          python3 admin/changelog_notes.py "$version" > release-notes.md
       - uses: softprops/action-gh-release@v2
         with:
           draft: true
