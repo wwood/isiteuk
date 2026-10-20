@@ -1,10 +1,9 @@
 [build-system]
-requires = ["setuptools>=45"]
+requires = ["setuptools>=64", "setuptools_scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "isiteuk"
-version = "0.0.2"
 description = "In-situ identification of eukaryotes in metagenomic data"
 readme = "README.md"
 license = "GPL-3.0-or-later"
@@ -25,6 +24,7 @@ dependencies = [
     "polars>=0.20",
     "zenodo_backpack>=0.3",
 ]
+dynamic = ["version"]
 
 [project.scripts]
 isiteuk = "isiteuk.main:main"
@@ -35,3 +35,14 @@ Homepage = "https://github.com/wwood/isiteuk"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["isiteuk*"]
+
+[tool.setuptools_scm]
+version_file = "isiteuk/version.py"
+version_scheme = "only-version"
+local_scheme = "no-local-version"
+
+[tool.bird_release]
+reminders = [
+    "Once the metapackage is on Zenodo: update DATA_DOI in isiteuk/metapackage.py, then release again.",
+    "Once on PyPI, submit to bioconda: update sha256 in conda.recipe/meta.yaml and open a PR to bioconda-recipes.",
+]

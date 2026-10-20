@@ -1,5 +1,9 @@
 # Changelog
 
-## [0.0.1] - 2026-06-19
+## v0.0.2
+
+* Publish to PyPI using trusted publisher.
+
+## v0.0.1
 
 Initial release.
