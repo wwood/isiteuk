@@ -40,3 +40,32 @@ jobs:
           path: dist/
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  draft-github-release:
+    name: Draft GitHub release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract changelog for this tag
+        run: |
+          python3 <<'PY'
+          import os
+          import pathlib
+          import re
+
+          version = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          text = pathlib.Path("CHANGELOG.md").read_text()
+          match = re.search(
+              rf"(?ms)^##\s+\[?v?{re.escape(version)}\]?\s*$(.*?)(?=^##\s|\Z)",
+              text,
+          )
+          notes = match.group(1).strip() if match else f"isiteuk {version}"
+          pathlib.Path("release-notes.md").write_text(notes + "\n")
+          PY
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: ${{ github.ref_name }}
+          body_path: release-notes.md
